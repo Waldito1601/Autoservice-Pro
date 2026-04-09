@@ -4,8 +4,6 @@ import { today, nowTime, fmt, showAlert } from '../lib/utils'
 import { useLang } from '../lib/LangContext'
 
 const emptyForm = () => ({
-  customer_name: '',
-  phone_number: '',
   car_model: '',
   service_type: '',
   service_description: '',
@@ -53,18 +51,16 @@ export default function ServiceDept({ sb }) {
   const handleSave = async () => {
     if (!sb) { showAlert(setAlert, t('errNoConn'), 'error'); return }
     const isOther = form.service_type === t('other')
-    if (!form.customer_name)  { showAlert(setAlert, t('errName'),  'error'); return }
-    if (!form.phone_number)   { showAlert(setAlert, t('errPhone'), 'error'); return }
-    if (!form.car_model)      { showAlert(setAlert, t('errCar'),   'error'); return }
-    if (!form.service_type)   { showAlert(setAlert, t('errType'),  'error'); return }
+    if (!form.car_model)    { showAlert(setAlert, t('errCar'),   'error'); return }
+    if (!form.service_type) { showAlert(setAlert, t('errType'),  'error'); return }
     if (isOther && !form.service_description) { showAlert(setAlert, t('errDesc'), 'error'); return }
     if (!form.price || isNaN(parseFloat(form.price))) { showAlert(setAlert, t('errPrice'), 'error'); return }
-    if (!form.service_date)   { showAlert(setAlert, t('errDate'),  'error'); return }
+    if (!form.service_date) { showAlert(setAlert, t('errDate'),  'error'); return }
 
     setSaving(true)
     const { error } = await sb.from('services').insert({
-      customer_name:       form.customer_name.trim(),
-      phone_number:        form.phone_number.trim() || null,
+      customer_name:       null,
+      phone_number:        null,
       car_model:           form.car_model.trim(),
       service_type:        form.service_type,
       service_description: form.service_description.trim() || null,
@@ -95,14 +91,6 @@ export default function ServiceDept({ sb }) {
       <div className="card">
         <div className="card-title">{t('newServiceRecord')}</div>
         <div className="form-grid">
-          <div className="form-group">
-            <label>{t('customerName')} *</label>
-            <input value={form.customer_name} onChange={e => set('customer_name', e.target.value)} placeholder={t('phName')} />
-          </div>
-          <div className="form-group">
-            <label>{t('phoneNumber')} *</label>
-            <input value={form.phone_number} onChange={e => set('phone_number', e.target.value)} placeholder={t('phPhone')} />
-          </div>
           <div className="form-group">
             <label>{t('carModel')} *</label>
             <input value={form.car_model} onChange={e => set('car_model', e.target.value)} placeholder={t('phCar')} />
@@ -150,20 +138,19 @@ export default function ServiceDept({ sb }) {
           <table>
             <thead>
               <tr>
-                <th>{t('customer')}</th><th>{t('car')}</th><th>{t('service')}</th>
+                <th>{t('car')}</th><th>{t('service')}</th>
                 <th>{t('description')}</th><th>{t('price')}</th><th>{t('time')}</th>
               </tr>
             </thead>
             <tbody>
               {loadingT ? (
-                <tr><td colSpan={6} className="empty-state">
+                <tr><td colSpan={5} className="empty-state">
                   <div className="loading"><div className="spinner" />{t('loading')}</div>
                 </td></tr>
               ) : todayRecs.length === 0 ? (
-                <tr><td colSpan={6} className="empty-state">{t('noRecordsToday')}</td></tr>
+                <tr><td colSpan={5} className="empty-state">{t('noRecordsToday')}</td></tr>
               ) : todayRecs.map(r => (
                 <tr key={r.id}>
-                  <td>{r.customer_name}</td>
                   <td>{r.car_model}</td>
                   <td>{r.service_type}</td>
                   <td className="td-truncate">{r.service_description}</td>
