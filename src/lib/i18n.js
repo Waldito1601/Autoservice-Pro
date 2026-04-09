@@ -85,6 +85,11 @@ export const translations = {
     noRecords:   'No records found.',
     paidUpdated: 'Payment status updated to Paid.',
     searchErr:   'Search error: ',
+    save:        'Save',
+    cancel:      'Cancel',
+    addCustomer: 'Add customer',
+    editCustomerInfo: 'Click to edit customer info',
+    customerInfoSaved: 'Customer info saved.',
 
     // Daily Report
     reportTitle:   'Daily Report',
@@ -221,6 +226,11 @@ export const translations = {
     noRecords:   'No se encontraron registros.',
     paidUpdated: 'Estado de pago actualizado a Pagado.',
     searchErr:   'Error de búsqueda: ',
+    save:        'Guardar',
+    cancel:      'Cancelar',
+    addCustomer: 'Agregar cliente',
+    editCustomerInfo: 'Clic para editar info del cliente',
+    customerInfoSaved: 'Información del cliente guardada.',
 
     // Daily Report
     reportTitle:    'Reporte Diario',
