@@ -12,7 +12,9 @@ import { LANGS } from './lib/i18n'
 const CACHE_KEY = 'autoservice_user'
 
 function saveCache(userId, email, role) {
-  localStorage.setItem(CACHE_KEY, JSON.stringify({ userId, email, role, savedAt: Date.now() }))
+  localStorage.setItem(CACHE_KEY, JSON.stringify({
+    userId, email, role, savedAt: Date.now()
+  }))
 }
 
 function clearCache() {
@@ -24,81 +26,81 @@ function loadCache() {
     const raw = localStorage.getItem(CACHE_KEY)
     if (!raw) return null
     const c = JSON.parse(raw)
-    if (Date.now() - c.savedAt > 10 * 60 * 60 * 1000) { clearCache(); return null }
+    if (Date.now() - c.savedAt > 10 * 60 * 60 * 1000) {
+      clearCache()
+      return null
+    }
     return c
   } catch { return null }
 }
 
 export default function App() {
   const { t, lang, switchLang } = useLang()
-  const [ready, setReady]   = useState(false)
-  const [session, setSession] = useState(null)
-  const [role, setRole]     = useState(null)
-  const [email, setEmail]   = useState(null)
-  const [tab, setTab]       = useState('dashboard')
+
+  // Load from cache instantly — no waiting
+  const cached = loadCache()
+  const [role, setRole]   = useState(cached?.role || null)
+  const [email, setEmail] = useState(cached?.email || null)
+  const [loggedIn, setLoggedIn] = useState(!!cached)
+  const [tab, setTab]     = useState(cached?.role === 'taller' ? 'service' : 'dashboard')
 
   useEffect(() => {
+    // Background session check — never blocks the UI
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (!session) {
         clearCache()
-        setReady(true)
+        setLoggedIn(false)
+        setRole(null)
         return
       }
+      // If same user as cache, keep going silently
+      if (cached?.userId === session.user.id) return
 
-      setSession(session)
-      setEmail(session.user.email)
-
-      // Try cache first
-      const cached = loadCache()
-      let r = cached?.userId === session.user.id ? cached.role : null
-
-      // Fetch from DB if not cached
-      if (!r) {
-        const { data } = await supabase
-          .from('profiles')
-          .select('role')
-          .eq('id', session.user.id)
-          .single()
-        r = data?.role || null
-      }
-
+      // Different user — fetch role
+      const { data } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', session.user.id)
+        .single()
+      const r = data?.role || null
       if (r) {
         saveCache(session.user.id, session.user.email, r)
         setRole(r)
+        setEmail(session.user.email)
+        setLoggedIn(true)
         setTab(r === 'taller' ? 'service' : 'dashboard')
       } else {
         clearCache()
+        setLoggedIn(false)
       }
-      setReady(true)
     })
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_OUT' || !session) {
-        clearCache()
-        setSession(null)
-        setRole(null)
-        setEmail(null)
-        setReady(true)
-        return
-      }
-      if (event === 'SIGNED_IN') {
-        setSession(session)
-        setEmail(session.user.email)
-        const { data } = await supabase
-          .from('profiles')
-          .select('role')
-          .eq('id', session.user.id)
-          .single()
-        const r = data?.role || null
-        if (r) {
-          saveCache(session.user.id, session.user.email, r)
-          setRole(r)
-          setTab(r === 'taller' ? 'service' : 'dashboard')
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (event === 'SIGNED_OUT' || !session) {
+          clearCache()
+          setLoggedIn(false)
+          setRole(null)
+          setEmail(null)
+          return
         }
-        setReady(true)
+        if (event === 'SIGNED_IN') {
+          const { data } = await supabase
+            .from('profiles')
+            .select('role')
+            .eq('id', session.user.id)
+            .single()
+          const r = data?.role || null
+          if (r) {
+            saveCache(session.user.id, session.user.email, r)
+            setRole(r)
+            setEmail(session.user.email)
+            setLoggedIn(true)
+            setTab(r === 'taller' ? 'service' : 'dashboard')
+          }
+        }
       }
-    })
-
+    )
     return () => subscription.unsubscribe()
   }, [])
 
@@ -107,15 +109,8 @@ export default function App() {
     await supabase.auth.signOut()
   }
 
-  if (!ready) {
-    return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f5f4f1' }}>
-        <div className="loading"><div className="spinner" /></div>
-      </div>
-    )
-  }
-
-  if (!session || !role) return <Login />
+  // Not logged in — show login
+  if (!loggedIn || !role) return <Login />
 
   const TABS = role === 'taller'
     ? [
@@ -182,7 +177,8 @@ export default function App() {
             {role === 'taller' ? t('roleTaller') : t('roleAdmin')}
           </span>
           <span style={{ fontSize: 12, color: '#888' }}>{email}</span>
-          <button className="btn btn-sm" onClick={handleLogout} style={{ color: '#A32D2D', borderColor: '#F7C1C1' }}>
+          <button className="btn btn-sm" onClick={handleLogout}
+            style={{ color: '#A32D2D', borderColor: '#F7C1C1' }}>
             {t('logout')}
           </button>
         </div>
