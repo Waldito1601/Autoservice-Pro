@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { today, fmt, fmtDate } from '../lib/utils'
 import { useLang } from '../lib/LangContext'
 
@@ -6,11 +6,16 @@ export default function Dashboard({ sb }) {
   const { t } = useLang()
   const [records, setRecords] = useState([])
   const [loading, setLoading] = useState(true)
+  const fetchedRef = useRef(false)
 
-  const load = async () => {
+  const load = async (showLoader = true) => {
     if (!sb) return
-    setLoading(true)
-    const { data } = await sb.from('services').select('*').order('created_at', { ascending: false })
+    if (showLoader && !fetchedRef.current) setLoading(true)
+    const { data } = await sb
+      .from('services')
+      .select('*')
+      .order('created_at', { ascending: false })
+    fetchedRef.current = true
     setRecords(data || [])
     setLoading(false)
   }
@@ -19,7 +24,8 @@ export default function Dashboard({ sb }) {
     load()
     if (!sb) return
     const channel = sb.channel('dashboard-rt')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'services' }, load)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'services' },
+        () => load(false))
       .subscribe()
     return () => sb.removeChannel(channel)
   }, [sb])
@@ -94,3 +100,4 @@ export default function Dashboard({ sb }) {
     </div>
   )
 }
+
