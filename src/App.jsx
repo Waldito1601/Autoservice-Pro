@@ -19,7 +19,13 @@ export default function App() {
   const [tab, setTab] = useState('dashboard')
 
   useEffect(() => {
+    // Add a timeout so the app never gets stuck loading
+    const timeout = setTimeout(() => {
+      setReady(true)
+    }, 3000)
+
     supabase.auth.getSession().then(async ({ data: { session } }) => {
+      clearTimeout(timeout)
       setSession(session)
       if (session?.user) {
         const r = await fetchRole(session.user.id)
@@ -39,7 +45,10 @@ export default function App() {
         setTab('dashboard')
       }
     })
-    return () => subscription.unsubscribe()
+    return () => {
+      clearTimeout(timeout)
+      subscription.unsubscribe()
+    }
   }, [])
 
   const fetchRole = async (userId) => {
