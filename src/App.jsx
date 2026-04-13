@@ -18,52 +18,67 @@ export default function App() {
   const defaultTab = (r) => r === 'taller' ? 'service' : 'dashboard'
   const [tab, setTab] = useState('dashboard')
 
-  useEffect(() => {
-    // Add a timeout so the app never gets stuck loading
-    const timeout = setTimeout(() => {
-      setReady(true)
-    }, 3000)
+  const fetchRole = async (userId) => {
+    try {
+      const { data } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', userId)
+        .single()
+      return data?.role || null
+    } catch {
+      return null
+    }
+  }
 
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      clearTimeout(timeout)
-      setSession(session)
-      if (session?.user) {
-        const r = await fetchRole(session.user.id)
-        setRole(r)
-        setTab(defaultTab(r))
+  useEffect(() => {
+    let mounted = true
+
+    const init = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!mounted) return
+        setSession(session)
+        if (session?.user) {
+          const r = await fetchRole(session.user.id)
+          if (!mounted) return
+          setRole(r)
+          setTab(defaultTab(r))
+        }
+      } catch (e) {
+        console.error('Auth init error:', e)
+      } finally {
+        if (mounted) setReady(true)
       }
-      setReady(true)
-    })
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      setSession(session)
-      if (session?.user) {
-        const r = await fetchRole(session.user.id)
-        setRole(r)
-        setTab(defaultTab(r))
-      } else {
+    }
+
+    init()
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (!mounted) return
+      if (event === 'SIGNED_OUT' || !session) {
+        setSession(null)
         setRole(null)
         setTab('dashboard')
+        return
+      }
+      setSession(session)
+      if (session?.user) {
+        const r = await fetchRole(session.user.id)
+        if (!mounted) return
+        setRole(r)
+        setTab(defaultTab(r))
       }
     })
+
     return () => {
-      clearTimeout(timeout)
+      mounted = false
       subscription.unsubscribe()
     }
   }, [])
 
-  const fetchRole = async (userId) => {
-    const { data } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', userId)
-      .single()
-    return data?.role || null
-  }
-
   const handleLogout = async () => {
     await supabase.auth.signOut()
-    setRole(null)
-    setTab('dashboard')
   }
 
   if (!authReady) {
@@ -76,8 +91,6 @@ export default function App() {
 
   if (!session) return <Login />
 
-  // admin sees everything including Users tab
-  // taller sees only Dashboard + Service Dept
   const TABS = role === 'taller'
     ? [
         { id: 'dashboard', label: t('dashboard') },
