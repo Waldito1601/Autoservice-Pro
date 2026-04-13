@@ -9,7 +9,6 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
     persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: false,
-    storageKey: 'autoservice-session',
   },
 })
 
