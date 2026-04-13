@@ -67,6 +67,8 @@ export default function App() {
 
   if (!session) return <Login />
 
+  // admin sees everything including Users tab
+  // taller sees only Dashboard + Service Dept
   const TABS = role === 'taller'
     ? [
         { id: 'dashboard', label: t('dashboard') },
@@ -151,4 +153,3 @@ export default function App() {
     </div>
   )
 }
-
