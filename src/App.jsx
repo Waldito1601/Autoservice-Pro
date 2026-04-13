@@ -151,6 +151,4 @@ export default function App() {
     </div>
   )
 }
-```
 
-After committing, Vercel will redeploy automatically. Then sign out and back in as Jorge — he will only see Dashboard and Service Dept.
