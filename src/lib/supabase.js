@@ -6,8 +6,9 @@ const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
 // Single shared client — no config needed from the user
 export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: {
-    persistSession: false,
-    autoRefreshToken: false,
+    persistSession: true,
+    autoRefreshToken: true,
+    storageKey: 'autoservice-session',
   },
 })
 
