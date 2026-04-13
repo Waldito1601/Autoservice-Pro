@@ -14,8 +14,8 @@ const CACHE_KEY = 'autoservice_user'
 function saveCache(session, role) {
   if (session && role) {
     localStorage.setItem(CACHE_KEY, JSON.stringify({
-      userId: session.user.id,
-      email:  session.user.email,
+      userId:  session.user.id,
+      email:   session.user.email,
       role,
       savedAt: Date.now(),
     }))
@@ -29,7 +29,6 @@ function loadCache() {
     const raw = localStorage.getItem(CACHE_KEY)
     if (!raw) return null
     const c = JSON.parse(raw)
-    // Expire cache after 10 hours
     if (Date.now() - c.savedAt > 10 * 60 * 60 * 1000) {
       localStorage.removeItem(CACHE_KEY)
       return null
@@ -43,28 +42,23 @@ function loadCache() {
 export default function App() {
   const { t, lang, switchLang } = useLang()
 
-  const cached = loadCache()
-  const [session, setSession] = useState(null)
-  const [role, setRole]       = useState(cached?.role || null)
-  const [email, setEmail]     = useState(cached?.email || null)
-  const [authReady, setReady] = useState(!!cached) // instant if cached
-  const [tab, setTab]         = useState(cached?.role === 'taller' ? 'service' : 'dashboard')
+  const cached                  = loadCache()
+  const [role, setRole]         = useState(cached?.role || null)
+  const [email, setEmail]       = useState(cached?.email || null)
+  const [sessionOk, setSession] = useState(!!cached)
+  const [tab, setTab]           = useState(cached?.role === 'taller' ? 'service' : 'dashboard')
 
   useEffect(() => {
+    // Verify session in background — don't block UI
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (!session) {
-        // No valid session — clear cache and show login
         saveCache(null, null)
         setRole(null)
         setEmail(null)
-        setReady(true)
+        setSession(false)
         return
       }
-
-      setSession(session)
-      setEmail(session.user.email)
-
-      // Only fetch role from DB if not cached
+      // Session valid — fetch role if not cached
       let r = cached?.userId === session.user.id ? cached.role : null
       if (!r) {
         const { data } = await supabase
@@ -74,26 +68,22 @@ export default function App() {
           .single()
         r = data?.role || null
       }
-
       setRole(r)
-      setTab(r === 'taller' ? 'service' : 'dashboard')
+      setEmail(session.user.email)
+      setSession(true)
       saveCache(session, r)
-      setReady(true)
+      if (r) setTab(r === 'taller' ? 'service' : 'dashboard')
     })
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_OUT' || !session) {
         saveCache(null, null)
-        setSession(null)
         setRole(null)
         setEmail(null)
-        setTab('dashboard')
-        setReady(true)
+        setSession(false)
         return
       }
       if (event === 'SIGNED_IN') {
-        setSession(session)
-        setEmail(session.user.email)
         const { data } = await supabase
           .from('profiles')
           .select('role')
@@ -101,9 +91,10 @@ export default function App() {
           .single()
         const r = data?.role || null
         setRole(r)
-        setTab(r === 'taller' ? 'service' : 'dashboard')
+        setEmail(session.user.email)
+        setSession(true)
         saveCache(session, r)
-        setReady(true)
+        setTab(r === 'taller' ? 'service' : 'dashboard')
       }
     })
 
@@ -115,18 +106,8 @@ export default function App() {
     await supabase.auth.signOut()
   }
 
-  // Show spinner only on very first ever load (no cache)
-  if (!authReady) {
-    return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f5f4f1' }}>
-        <div className="loading"><div className="spinner" /></div>
-      </div>
-    )
-  }
-
-  // Not logged in
-  if (!role && !cached) return <Login />
-  if (authReady && !role) return <Login />
+  // Show login if no cache and no session
+  if (!sessionOk && !role) return <Login />
 
   const TABS = role === 'taller'
     ? [
