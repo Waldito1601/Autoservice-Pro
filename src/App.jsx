@@ -67,8 +67,6 @@ export default function App() {
 
   if (!session) return <Login />
 
-  // admin sees everything including Users tab
-  // taller sees only Dashboard + Service Dept
   const TABS = role === 'taller'
     ? [
         { id: 'dashboard', label: t('dashboard') },
@@ -153,3 +151,6 @@ export default function App() {
     </div>
   )
 }
+```
+
+After committing, Vercel will redeploy automatically. Then sign out and back in as Jorge — he will only see Dashboard and Service Dept.
