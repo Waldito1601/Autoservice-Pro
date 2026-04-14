@@ -5,113 +5,120 @@ import AdminDept      from './pages/AdminDept'
 import DailyReport    from './pages/DailyReport'
 import UserManagement from './pages/UserManagement'
 import Login          from './pages/Login'
-import { supabase } from './lib/supabase'
-import { useLang } from './lib/LangContext'
-import { LANGS } from './lib/i18n'
+import { supabase }   from './lib/supabase'
+import { useLang }    from './lib/LangContext'
+import { LANGS }      from './lib/i18n'
 
-const CACHE_KEY = 'autoservice_user'
-
-function saveCache(userId, email, role) {
-  localStorage.setItem(CACHE_KEY, JSON.stringify({
-    userId, email, role, savedAt: Date.now()
-  }))
-}
-
-function clearCache() {
-  localStorage.removeItem(CACHE_KEY)
-}
-
-function loadCache() {
-  try {
-    const raw = localStorage.getItem(CACHE_KEY)
-    if (!raw) return null
-    const c = JSON.parse(raw)
-    if (Date.now() - c.savedAt > 10 * 60 * 60 * 1000) {
-      clearCache()
-      return null
-    }
-    return c
-  } catch { return null }
-}
+const CACHE_KEY = 'autoservice_role'
 
 export default function App() {
   const { t, lang, switchLang } = useLang()
+  const [authReady, setAuthReady] = useState(false)
+  const [session,   setSession]   = useState(null)
+  const [role,      setRole]      = useState(null)
+  const [email,     setEmail]     = useState(null)
+  const [tab,       setTab]       = useState('dashboard')
 
-  // Load from cache instantly — no waiting
-  const cached = loadCache()
-  const [role, setRole]   = useState(cached?.role || null)
-  const [email, setEmail] = useState(cached?.email || null)
-  const [loggedIn, setLoggedIn] = useState(!!cached)
-  const [tab, setTab]     = useState(cached?.role === 'taller' ? 'service' : 'dashboard')
-
+  /* ── 1. Resolve auth ONCE on mount ── */
   useEffect(() => {
-    // Background session check — never blocks the UI
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (!session) {
-        clearCache()
-        setLoggedIn(false)
-        setRole(null)
+    let alive = true
+
+    const resolveAuth = async () => {
+      // Try to get existing session (restored from localStorage by Supabase)
+      const { data: { session }, error } = await supabase.auth.getSession()
+
+      if (!alive) return
+
+      if (error || !session) {
+        localStorage.removeItem(CACHE_KEY)
+        setAuthReady(true)
         return
       }
-      // If same user as cache, keep going silently
-      if (cached?.userId === session.user.id) return
 
-      // Different user — fetch role
-      const { data } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', session.user.id)
-        .single()
-      const r = data?.role || null
-      if (r) {
-        saveCache(session.user.id, session.user.email, r)
-        setRole(r)
-        setEmail(session.user.email)
-        setLoggedIn(true)
-        setTab(r === 'taller' ? 'service' : 'dashboard')
-      } else {
-        clearCache()
-        setLoggedIn(false)
-      }
-    })
+      await applySession(session)
+      if (alive) setAuthReady(true)
+    }
 
+    resolveAuth()
+
+    // Listen for future auth events (login, logout, token refresh)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        if (!alive) return
         if (event === 'SIGNED_OUT' || !session) {
-          clearCache()
-          setLoggedIn(false)
+          localStorage.removeItem(CACHE_KEY)
+          setSession(null)
           setRole(null)
           setEmail(null)
           return
         }
-        if (event === 'SIGNED_IN') {
-          const { data } = await supabase
-            .from('profiles')
-            .select('role')
-            .eq('id', session.user.id)
-            .single()
-          const r = data?.role || null
-          if (r) {
-            saveCache(session.user.id, session.user.email, r)
-            setRole(r)
-            setEmail(session.user.email)
-            setLoggedIn(true)
-            setTab(r === 'taller' ? 'service' : 'dashboard')
-          }
+        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+          await applySession(session)
         }
       }
     )
-    return () => subscription.unsubscribe()
-  }, [])
+
+    return () => {
+      alive = false
+      subscription.unsubscribe()
+    }
+  }, []) // runs once — correct
+
+  /* ── 2. Fetch role from profiles table ── */
+  const applySession = async (session) => {
+    setSession(session)
+    setEmail(session.user.email)
+
+    // Check cache first to avoid extra DB call
+    const cached = localStorage.getItem(CACHE_KEY)
+    if (cached) {
+      const { userId, role: cachedRole } = JSON.parse(cached)
+      if (userId === session.user.id && cachedRole) {
+        setRole(cachedRole)
+        setTab(cachedRole === 'taller' ? 'service' : 'dashboard')
+        return
+      }
+    }
+
+    // Fetch from DB
+    const { data } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', session.user.id)
+      .single()
+
+    const r = data?.role || null
+    if (r) {
+      localStorage.setItem(CACHE_KEY, JSON.stringify({
+        userId: session.user.id, role: r
+      }))
+      setRole(r)
+      setTab(r === 'taller' ? 'service' : 'dashboard')
+    }
+  }
 
   const handleLogout = async () => {
-    clearCache()
+    localStorage.removeItem(CACHE_KEY)
     await supabase.auth.signOut()
   }
 
-  // Not logged in — show login
-  if (!loggedIn || !role) return <Login />
+  /* ── 3. Wait for auth to resolve before rendering ── */
+  if (!authReady) {
+    return (
+      <div style={{
+        minHeight: '100vh', display: 'flex',
+        alignItems: 'center', justifyContent: 'center',
+        background: '#f5f4f1'
+      }}>
+        <div className="loading"><div className="spinner" /></div>
+      </div>
+    )
+  }
 
+  /* ── 4. Not authenticated → Login ── */
+  if (!session || !role) return <Login />
+
+  /* ── 5. Authenticated → App (supabase guaranteed to have valid session) ── */
   const TABS = role === 'taller'
     ? [
         { id: 'dashboard', label: t('dashboard') },
@@ -128,14 +135,18 @@ export default function App() {
   const allowedIds = TABS.map(tb => tb.id)
   const activeTab  = allowedIds.includes(tab) ? tab : TABS[0].id
 
+  // Key = session.access_token — forces pages to remount with fresh
+  // supabase session after refresh, triggering their useEffect([sb])
+  const sessionKey = session.access_token.slice(-8)
+
   const renderPage = () => {
     switch (activeTab) {
-      case 'dashboard': return <Dashboard      sb={supabase} />
-      case 'service':   return <ServiceDept    sb={supabase} />
-      case 'admin':     return <AdminDept      sb={supabase} />
-      case 'report':    return <DailyReport    sb={supabase} />
-      case 'users':     return <UserManagement sb={supabase} />
-      default:          return <Dashboard      sb={supabase} />
+      case 'dashboard': return <Dashboard      key={`dash-${sessionKey}`}  sb={supabase} />
+      case 'service':   return <ServiceDept    key={`svc-${sessionKey}`}   sb={supabase} />
+      case 'admin':     return <AdminDept      key={`adm-${sessionKey}`}   sb={supabase} />
+      case 'report':    return <DailyReport    key={`rep-${sessionKey}`}   sb={supabase} />
+      case 'users':     return <UserManagement key={`usr-${sessionKey}`}   sb={supabase} />
+      default:          return <Dashboard      key={`dash-${sessionKey}`}  sb={supabase} />
     }
   }
 
