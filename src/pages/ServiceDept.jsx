@@ -76,6 +76,14 @@ export default function ServiceDept({ sb }) {
     loadToday()
   }
 
+  const deleteRecord = async (id) => {
+    if (!window.confirm(t('confirmDelete'))) return
+    const { error } = await sb.from('services').delete().eq('id', id)
+    if (error) { showAlert(setAlert, `Error: ${error.message}`, 'error'); return }
+    showAlert(setAlert, t('recordDeleted'), 'success')
+    loadToday()
+  }
+
   const isOther = form.service_type === t('other')
   const descLabel = isOther ? `${t('serviceDescRequired')} *` : t('serviceDescOptional')
 
@@ -140,15 +148,16 @@ export default function ServiceDept({ sb }) {
               <tr>
                 <th>{t('car')}</th><th>{t('service')}</th>
                 <th>{t('description')}</th><th>{t('price')}</th><th>{t('time')}</th>
+                <th>{t('action')}</th>
               </tr>
             </thead>
             <tbody>
               {loadingT ? (
-                <tr><td colSpan={5} className="empty-state">
+                <tr><td colSpan={6} className="empty-state">
                   <div className="loading"><div className="spinner" />{t('loading')}</div>
                 </td></tr>
               ) : todayRecs.length === 0 ? (
-                <tr><td colSpan={5} className="empty-state">{t('noRecordsToday')}</td></tr>
+                <tr><td colSpan={6} className="empty-state">{t('noRecordsToday')}</td></tr>
               ) : todayRecs.map(r => (
                 <tr key={r.id}>
                   <td>{r.car_model}</td>
@@ -156,6 +165,15 @@ export default function ServiceDept({ sb }) {
                   <td className="td-truncate">{r.service_description}</td>
                   <td>${fmt(r.price)}</td>
                   <td>{(r.service_time || '').slice(0, 5)}</td>
+                  <td>
+                    <button
+                      className="btn btn-sm"
+                      style={{ color: '#A32D2D', borderColor: '#F7C1C1' }}
+                      onClick={() => deleteRecord(r.id)}
+                    >
+                      {t('delete')}
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
