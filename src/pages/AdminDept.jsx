@@ -85,6 +85,16 @@ export default function AdminDept({ sb }) {
 
   const cancelEdit = () => setEditing(null)
 
+  const deleteRecord = async (id) => {
+    if (!window.confirm(t('confirmDelete'))) return
+    const { error } = await sb.from('services').delete().eq('id', id)
+    if (error) { showAlert(setAlert, `Error: ${error.message}`, 'error'); return }
+    showAlert(setAlert, t('recordDeleted'), 'success')
+    const updated = allRecordsRef.current.filter(r => r.id !== id)
+    allRecordsRef.current = updated
+    applyFilter(updated, query)
+  }
+
   const saveCustomerInfo = async (id) => {
     if (!sb) return
     if (!editForm.customer_name.trim()) { showAlert(setAlert, t('errName'), 'error'); return }
@@ -218,6 +228,13 @@ export default function AdminDept({ sb }) {
                       ) : (
                         <span style={{ fontSize: 12, color: '#999' }}>{t('paid')}</span>
                       )}
+                      <button
+                        className="btn btn-sm"
+                        style={{ color: '#A32D2D', borderColor: '#F7C1C1', marginLeft: 6 }}
+                        onClick={() => deleteRecord(r.id)}
+                      >
+                        {t('delete')}
+                      </button>
                     </td>
                   </tr>
                 )
